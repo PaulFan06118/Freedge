@@ -1,8 +1,8 @@
-// ===== Supabase 設定 =====
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-const SUPABASE_URL = "https://lykatdkwgukjgiaudgat.supabase.co";   // 從專案複製
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx5a2F0ZGt3Z3VramdpYXVkZ2F0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTgwMjgsImV4cCI6MjA4MDY3NDAyOH0.sCkKjULRtFXwu-uD_OMMT1Cm7jr6jqVGx7P2Ch1nyKY"; // 從專案複製
+// ===== Supabase 設定 =====
+const SUPABASE_URL = "https://lykatdkwgukjgiaudgat.supabase.co";       // 你的 Supabase 專案 URL
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx5a2F0ZGt3Z3VramdpYXVkZ2F0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTgwMjgsImV4cCI6MjA4MDY3NDAyOH0.sCkKjULRtFXwu-uD_OMMT1Cm7jr6jqVGx7P2Ch1nyKY"; // 你的 ANON KEY
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -28,7 +28,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 
-// ===== 使用者登入/註冊 =====
+// ===== 登入 / 註冊 =====
 registerBtn.addEventListener('click', async ()=>{
     const email = emailInput.value;
     const password = passwordInput.value;
@@ -46,12 +46,6 @@ loginBtn.addEventListener('click', async ()=>{
 
 logoutBtn.addEventListener('click', async ()=>{
     await supabase.auth.signOut();
-    currentUser = null;
-    uploadSection.style.display = 'none';
-    logoutBtn.style.display = 'none';
-    registerBtn.style.display = 'inline';
-    loginBtn.style.display = 'inline';
-    welcomeText.textContent = '';
 });
 
 // 監聽登入狀態
@@ -101,15 +95,10 @@ foodForm.addEventListener('submit', async e=>{
     if(fileInput.files[0]){
         const file = fileInput.files[0];
         const fileName = Date.now() + "-" + file.name;
-        const { data, error } = await supabase.storage
-            .from('food-images')
-            .upload(fileName, file);
-
+        const { data, error } = await supabase.storage.from('food-images').upload(fileName, file);
         if(error){ alert(error.message); return; }
-        const { publicUrl } = supabase
-            .storage
-            .from('food-images')
-            .getPublicUrl(fileName);
+
+        const { publicUrl } = supabase.storage.from('food-images').getPublicUrl(fileName);
         image_url = publicUrl;
     }
 
