@@ -1,105 +1,176 @@
-// ====== Firebase 初始化 ======
+// ===== Firebase 初始化 =====
 const firebaseConfig = {
-  apiKey: "AIzaSyDCnxi5yYqPMSnEojPfnXgqBE2_Oi-X1OY",
-  authDomain: "freedge-yzu.firebaseapp.com",
-  databaseURL: "https://freedge-yzu-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "freedge-yzu",
-  storageBucket: "freedge-yzu.firebasestorage.app",
-  messagingSenderId: "577649251490",
-  appId: "1:577649251490:web:9fb4af3ee7c4d9d06f33fb",
-  measurementId: "G-GVK312YLPL"
+    apiKey: "AIzaSyDCnxi5yYqPMSnEojPfnXgqBE2_Oi-X1OY",
+    authDomain: "freedge-yzu.firebaseapp.com",
+    databaseURL: "https://freedge-yzu-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "freedge-yzu",
+    storageBucket: "freedge-yzu.firebasestorage.app",
 };
-
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.database();
+const storage = firebase.storage();
 
-let map;
-let user = null;
+// ===== 元素 =====
+const registerBtn = document.getElementById('registerBtn');
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const authForms = document.getElementById('authForms');
+const welcome = document.getElementById('welcome');
+const welcomeText = document.getElementById('welcomeText');
+const uploadSection = document.getElementById('upload');
 
-// ====== Google Map 初始化 ======
-function initMap() {
-    map = new google.maps.Map(document.getElementById("map"), {
-        center: { lat: 25.0330, lng: 121.5654 },
-        zoom: 14
-    });
+const foodForm = document.getElementById('foodForm');
+const foodList = document.getElementById('foodList');
+const featuredList = document.getElementById('featuredList');
+const useMyLocationBtn = document.getElementById('useMyLocationBtn');
 
-    loadFoodFromDB();
-}
+let currentUser = null;
+let currentLatLng = null;
 
-// ====== 監聽登入狀態 ======
-auth.onAuthStateChanged(u => {
-    user = u;
-    if (u) {
-        document.getElementById("auth-status").innerText = "已登入：" + u.email;
-        document.getElementById("logout-btn").style.display = "inline-block";
-        document.getElementById("upload-section").style.display = "block";
+// ===== Leaflet 地圖 =====
+var map = L.map('mapid').setView([25.033, 121.565], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+// ===== 登入/註冊/登出 =====
+registerBtn.addEventListener('click', () => {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    if(!email || !password){ alert('請填寫完整'); return; }
+    auth.createUserWithEmailAndPassword(email, password)
+        .then(() => alert('註冊成功'))
+        .catch(err => alert(err.message));
+});
+
+loginBtn.addEventListener('click', () => {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    auth.signInWithEmailAndPassword(email, password)
+        .catch(err => alert(err.message));
+});
+
+logoutBtn.addEventListener('click', () => auth.signOut());
+
+// ===== 監聽登入狀態 =====
+auth.onAuthStateChanged(user => {
+    if(user){
+        currentUser = user;
+        authForms.style.display = 'none';
+        welcome.style.display = 'block';
+        uploadSection.style.display = 'block';
+        welcomeText.textContent = `歡迎, ${user.email}`;
+        loadFoods();
     } else {
-        document.getElementById("auth-status").innerText = "尚未登入";
-        document.getElementById("logout-btn").style.display = "none";
-        document.getElementById("upload-section").style.display = "none";
+        currentUser = null;
+        authForms.style.display = 'block';
+        welcome.style.display = 'none';
+        uploadSection.style.display = 'none';
+        foodList.innerHTML = '';
+        featuredList.innerHTML = '';
     }
 });
 
-// ====== 註冊 ======
-document.getElementById("signup-btn").onclick = () => {
-    const email = email.value;
-    const password = password.value;
-    auth.createUserWithEmailAndPassword(email, password)
-        .catch(err => alert(err.message));
-};
+// ===== 使用者位置 =====
+useMyLocationBtn.addEventListener('click', () => {
+    if(!navigator.geolocation){ alert('瀏覽器不支援'); return; }
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            currentLatLng = [pos.coords.latitude, pos.coords.longitude];
+            document.getElementById('foodLocation').value = 
+                `經度:${currentLatLng[1].toFixed(5)}, 緯度:${currentLatLng[0].toFixed(5)}`;
+        },
+        err => alert('無法取得位置')
+    );
+});
 
-// ====== 登入 ======
-document.getElementById("login-btn").onclick = () => {
-    const emailVal = email.value;
-    const passVal = password.value;
-    auth.signInWithEmailAndPassword(emailVal, passVal)
-        .catch(err => alert(err.message));
-};
+// ===== 上傳剩食 =====
+foodForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    if(!currentUser){ alert('請先登入'); return; }
 
-// ====== 登出 ======
-document.getElementById("logout-btn").onclick = () => auth.signOut();
+    const name = document.getElementById('foodName').value;
+    const loc = document.getElementById('foodLocation').value;
+    const fileInput = document.getElementById('foodImage');
+    let image_url = '';
 
-// ====== 上傳剩食 ======
-document.getElementById("upload-btn").onclick = () => {
-    if (!user) return alert("請先登入！");
+    // 上傳圖片到 Firebase Storage
+    if(fileInput.files[0]){
+        const file = fileInput.files[0];
+        const fileName = Date.now() + "-" + file.name;
+        const storageRef = storage.ref().child('food-images/' + fileName);
+        await storageRef.put(file);
+        image_url = await storageRef.getDownloadURL();
+    }
 
-    const name = document.getElementById("food-name").value;
-    const desc = document.getElementById("food-desc").value;
-    const file = document.getElementById("food-image").files[0];
-
-    if (!file) return alert("請選擇照片！");
-
-    // 將圖片轉成 Base64
-    const reader = new FileReader();
-    reader.onload = () => {
-        navigator.geolocation.getCurrentPosition(pos => {
-            db.ref("foods").push({
-                user: user.uid,
-                name: name,
-                desc: desc,
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                img: reader.result
-            });
-        });
-    };
-    reader.readAsDataURL(file);
-};
-
-// ====== 地圖載入剩食 ======
-function loadFoodFromDB() {
-    db.ref("foods").on("value", snapshot => {
-        const data = snapshot.val();
-        if (!data) return;
-
-        Object.values(data).forEach(item => {
-            new google.maps.Marker({
-                position: { lat: item.lat, lng: item.lng },
-                map,
-                title: item.name
-            });
-        });
+    // 寫入 Firebase Database
+    const newRef = db.ref('foods').push();
+    newRef.set({
+        user: currentUser.email,
+        name,
+        location: loc,
+        lat: currentLatLng?.[0] || null,
+        lng: currentLatLng?.[1] || null,
+        image_url,
+        timestamp: Date.now()
     });
+
+    foodForm.reset();
+    currentLatLng = null;
+});
+
+// ===== 讀取剩食 =====
+function loadFoods(){
+    db.ref('foods').on('value', snapshot => {
+        foodList.innerHTML = '';
+        featuredList.innerHTML = '';
+        snapshot.forEach(snap => addFoodToPage(snap.val()));
+    });
+}
+
+// ===== 顯示剩食 =====
+function addFoodToPage(f){
+    // 推薦區
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'item';
+    const itemText = document.createElement('p');
+    itemText.textContent = f.name;
+    itemDiv.appendChild(itemText);
+    if(f.image_url){
+        const itemImg = document.createElement('img');
+        itemImg.src = f.image_url;
+        itemImg.style.width = '100px';
+        itemImg.style.height = '100px';
+        itemImg.style.objectFit = 'cover';
+        itemDiv.appendChild(itemImg);
+    }
+    featuredList.appendChild(itemDiv);
+
+    // 列表區
+    const div = document.createElement('div');
+    div.style.marginTop = '10px';
+    const text = document.createElement('p');
+    text.textContent = `食物: ${f.name} / 地點: ${f.location}`;
+    div.appendChild(text);
+    if(f.image_url){
+        const img = document.createElement('img');
+        img.src = f.image_url;
+        img.style.width = '200px';
+        img.style.height = '150px';
+        img.style.objectFit = 'cover';
+        img.style.marginTop = '5px';
+        div.appendChild(img);
+    }
+    foodList.appendChild(div);
+
+    // 地圖標記
+    if(f.lat && f.lng){
+        L.marker([f.lat, f.lng])
+         .addTo(map)
+         .bindPopup(`<b>${f.name}</b><br>${f.location}`);
+    }
 }
