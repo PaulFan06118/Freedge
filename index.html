@@ -7,61 +7,47 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 </head>
 <body>
 <header>
-    <h1>剩食平台</h1>
+  <h1>剩食平台</h1>
 </header>
 
-<main>
-    <!-- 使用者登入/註冊 -->
-    <section id="user">
-        <h2>使用者系統</h2>
-        <div id="authForms">
-            <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="密碼">
-            <button id="loginBtn">登入</button>
-            <button id="registerBtn">註冊</button>
-        </div>
-        <div id="welcome" style="display:none;">
-            <p id="welcomeText"></p>
-            <button id="logoutBtn">登出</button>
-        </div>
-    </section>
+<section id="auth">
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <button id="registerBtn">註冊</button>
+  <button id="loginBtn">登入</button>
+  <button id="logoutBtn" style="display:none;">登出</button>
+  <p id="welcomeText"></p>
+</section>
 
-    <!-- 上傳剩食 -->
-    <section id="upload" style="display:none;">
-        <h2>上傳剩食資訊</h2>
-        <form id="foodForm">
-            <input type="text" id="foodName" placeholder="食物名稱" required>
-            <input type="text" id="foodLocation" placeholder="位置" required>
-            <button type="button" id="useMyLocationBtn">使用我的位置</button>
-            <input type="file" id="foodImage" accept="image/*">
-            <button type="submit">上傳</button>
-        </form>
-        <div id="foodList"></div>
-    </section>
+<section id="upload" style="display:none;">
+  <h2>上傳剩食資訊</h2>
+  <button id="useMyLocationBtn">使用我的位置</button>
+  <form id="foodForm">
+    <input type="text" id="foodName" placeholder="食物名稱" required>
+    <input type="text" id="foodLocation" placeholder="位置" required>
+    <input type="file" id="foodImage" accept="image/*">
+    <button type="submit">上傳</button>
+  </form>
+</section>
 
-    <!-- 推薦剩食 -->
-    <section id="featured">
-        <h2>推薦剩食</h2>
-        <div class="item-list" id="featuredList"></div>
-    </section>
+<section id="featured">
+  <h2>推薦剩食</h2>
+  <div id="featuredList" class="item-list"></div>
+</section>
 
-    <!-- 地圖 -->
-    <section id="map">
-        <h2>剩食地圖</h2>
-        <div id="mapid" style="height: 400px;"></div>
-    </section>
-</main>
+<section id="foodListSection">
+  <h2>剩食列表</h2>
+  <div id="foodList"></div>
+</section>
 
-<script src="js/main.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-database.js"></script>
+<section id="map">
+  <h2>剩食地圖</h2>
+  <div id="mapid" style="height:400px;"></div>
+</section>
+
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

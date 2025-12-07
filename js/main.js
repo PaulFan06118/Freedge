@@ -1,73 +1,26 @@
-// ===== Firebase 設定 =====
-// TODO: 把下面改成你的 Firebase config
-const firebaseConfig = {
-  apiKey: "AIzaSyDCnxi5yYqPMSnEojPfnXgqBE2_Oi-X1OY",
-  authDomain: "freedge-yzu.firebaseapp.com",
-  projectId: "freedge-yzu",
-  storageBucket: "freedge-yzu.firebasestorage.app",
-  messagingSenderId: "577649251490",
-  appId: "1:577649251490:web:9fb4af3ee7c4d9d06f33fb",
-  measurementId: "G-GVK312YLPL"
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.database();
+// ===== Supabase 設定 =====
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+const SUPABASE_URL = "https://lykatdkwgukjgiaudgat.supabase.co";   // 從專案複製
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx5a2F0ZGt3Z3VramdpYXVkZ2F0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTgwMjgsImV4cCI6MjA4MDY3NDAyOH0.sCkKjULRtFXwu-uD_OMMT1Cm7jr6jqVGx7P2Ch1nyKY"; // 從專案複製
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===== 元素選取 =====
-const loginBtn = document.getElementById('loginBtn');
 const registerBtn = document.getElementById('registerBtn');
+const loginBtn = document.getElementById('loginBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const emailInput = document.getElementById('email');
 const passwordInput = document.getElementById('password');
-const authForms = document.getElementById('authForms');
-const welcome = document.getElementById('welcome');
 const welcomeText = document.getElementById('welcomeText');
 const uploadSection = document.getElementById('upload');
-
-const form = document.getElementById('foodForm');
+const foodForm = document.getElementById('foodForm');
 const foodList = document.getElementById('foodList');
 const featuredList = document.getElementById('featuredList');
 const useMyLocationBtn = document.getElementById('useMyLocationBtn');
 
+let currentUser = null;
 let currentLatLng = null;
-
-// ===== 登入/註冊/登出 =====
-registerBtn.addEventListener('click', () => {
-    const email = emailInput.value;
-    const password = passwordInput.value;
-    if(!email || !password){ alert('請填寫完整'); return; }
-    auth.createUserWithEmailAndPassword(email, password)
-    .then(() => alert('註冊成功'))
-    .catch(err => alert(err.message));
-});
-
-loginBtn.addEventListener('click', () => {
-    const email = emailInput.value;
-    const password = passwordInput.value;
-    auth.signInWithEmailAndPassword(email, password)
-    .catch(err => alert(err.message));
-});
-
-logoutBtn.addEventListener('click', () => { auth.signOut(); });
-
-// 監聽登入狀態
-auth.onAuthStateChanged(user => {
-    if(user){
-        currentUser = user;
-        authForms.style.display = 'none';
-        welcome.style.display = 'block';
-        welcomeText.textContent = `歡迎, ${user.email}`;
-        uploadSection.style.display = 'block';
-        loadFoods();
-    } else {
-        currentUser = null;
-        authForms.style.display = 'block';
-        welcome.style.display = 'none';
-        uploadSection.style.display = 'none';
-        featuredList.innerHTML = '';
-        foodList.innerHTML = '';
-    }
-});
 
 // ===== Leaflet 地圖 =====
 var map = L.map('mapid').setView([25.033, 121.565], 13);
@@ -75,8 +28,56 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 
+// ===== 使用者登入/註冊 =====
+registerBtn.addEventListener('click', async ()=>{
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    if(!email||!password){ alert("請填寫完整"); return; }
+    const { error } = await supabase.auth.signUp({ email, password });
+    if(error){ alert(error.message); } else { alert("註冊成功"); }
+});
+
+loginBtn.addEventListener('click', async ()=>{
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if(error){ alert(error.message); } 
+});
+
+logoutBtn.addEventListener('click', async ()=>{
+    await supabase.auth.signOut();
+    currentUser = null;
+    uploadSection.style.display = 'none';
+    logoutBtn.style.display = 'none';
+    registerBtn.style.display = 'inline';
+    loginBtn.style.display = 'inline';
+    welcomeText.textContent = '';
+});
+
+// 監聽登入狀態
+supabase.auth.onAuthStateChange((_event, session)=>{
+    if(session?.user){
+        currentUser = session.user;
+        uploadSection.style.display = 'block';
+        logoutBtn.style.display = 'inline';
+        registerBtn.style.display = 'none';
+        loginBtn.style.display = 'none';
+        welcomeText.textContent = `歡迎, ${currentUser.email}`;
+        loadFoods();
+    } else {
+        currentUser = null;
+        uploadSection.style.display = 'none';
+        logoutBtn.style.display = 'none';
+        registerBtn.style.display = 'inline';
+        loginBtn.style.display = 'inline';
+        welcomeText.textContent = '';
+        foodList.innerHTML = '';
+        featuredList.innerHTML = '';
+    }
+});
+
 // ===== 使用者位置 =====
-useMyLocationBtn.addEventListener('click', () => {
+useMyLocationBtn.addEventListener('click', ()=>{
     if(!navigator.geolocation){ alert('瀏覽器不支援'); return; }
     navigator.geolocation.getCurrentPosition(
         pos => {
@@ -88,41 +89,54 @@ useMyLocationBtn.addEventListener('click', () => {
 });
 
 // ===== 上傳剩食 =====
-form.addEventListener('submit', e => {
+foodForm.addEventListener('submit', async e=>{
     e.preventDefault();
     if(!currentUser){ alert('請先登入'); return; }
 
     const name = document.getElementById('foodName').value;
     const loc = document.getElementById('foodLocation').value;
     const fileInput = document.getElementById('foodImage');
-    let fileData = '';
+    let image_url = '';
 
     if(fileInput.files[0]){
-        fileData = URL.createObjectURL(fileInput.files[0]);
+        const file = fileInput.files[0];
+        const fileName = Date.now() + "-" + file.name;
+        const { data, error } = await supabase.storage
+            .from('food-images')
+            .upload(fileName, file);
+
+        if(error){ alert(error.message); return; }
+        const { publicUrl } = supabase
+            .storage
+            .from('food-images')
+            .getPublicUrl(fileName);
+        image_url = publicUrl;
     }
 
-    const foodData = {
-        user: currentUser.email,
-        name, location: loc,
-        latLng: currentLatLng,
-        image: fileData,
-        timestamp: Date.now()
-    };
+    const { error } = await supabase.from('foods').insert([{
+        user_email: currentUser.email,
+        name,
+        location: loc,
+        lat: currentLatLng?.[0] || null,
+        lng: currentLatLng?.[1] || null,
+        image_url,
+        created_at: new Date()
+    }]);
 
-    const newRef = db.ref('foods').push();
-    newRef.set(foodData);
+    if(error){ alert(error.message); return; }
 
-    form.reset();
+    foodForm.reset();
     currentLatLng = null;
+    loadFoods();
 });
 
 // ===== 讀取剩食 =====
-function loadFoods(){
-    db.ref('foods').on('value', snapshot => {
-        featuredList.innerHTML = '';
-        foodList.innerHTML = '';
-        snapshot.forEach(snap => addFoodToPage(snap.val()));
-    });
+async function loadFoods(){
+    const { data, error } = await supabase.from('foods').select('*').order('created_at', {ascending:false});
+    if(error){ console.log(error); return; }
+    foodList.innerHTML = '';
+    featuredList.innerHTML = '';
+    data.forEach(f => addFoodToPage(f));
 }
 
 // ===== 顯示剩食 =====
@@ -133,9 +147,9 @@ function addFoodToPage(f){
     const itemText = document.createElement('p');
     itemText.textContent = f.name;
     itemDiv.appendChild(itemText);
-    if(f.image){
+    if(f.image_url){
         const itemImg = document.createElement('img');
-        itemImg.src = f.image;
+        itemImg.src = f.image_url;
         itemImg.style.width = '100px';
         itemImg.style.height = '100px';
         itemImg.style.objectFit = 'cover';
@@ -149,9 +163,9 @@ function addFoodToPage(f){
     const text = document.createElement('p');
     text.textContent = `食物: ${f.name} / 地點: ${f.location}`;
     div.appendChild(text);
-    if(f.image){
+    if(f.image_url){
         const img = document.createElement('img');
-        img.src = f.image;
+        img.src = f.image_url;
         img.style.width = '200px';
         img.style.height = '150px';
         img.style.objectFit = 'cover';
@@ -161,8 +175,9 @@ function addFoodToPage(f){
     foodList.appendChild(div);
 
     // 地圖標記
-    let markerLatLng = f.latLng || [25.033 + Math.random()/100, 121.565 + Math.random()/100];
-    L.marker(markerLatLng)
-     .addTo(map)
-     .bindPopup(`<b>${f.name}</b><br>${f.location}`);
+    if(f.lat && f.lng){
+        L.marker([f.lat, f.lng])
+         .addTo(map)
+         .bindPopup(`<b>${f.name}</b><br>${f.location}`);
+    }
 }
