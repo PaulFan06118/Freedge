@@ -1,73 +1,64 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>剩食平台</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>剩食平台</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 </head>
 <body>
-    <!-- Header -->
-    <header>
-        <h1>剩食平台</h1>
-        <nav>
-            <a href="index.html">首頁</a>
-            <a href="#">關於我們</a>
-            <a href="#">聯絡我們</a>
-        </nav>
-    </header>
+<header>
+    <h1>剩食平台</h1>
+</header>
+
+<main>
+    <!-- 使用者登入/註冊 -->
+    <section id="user">
+        <h2>使用者系統</h2>
+        <div id="authForms">
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="password" placeholder="密碼">
+            <button id="loginBtn">登入</button>
+            <button id="registerBtn">註冊</button>
+        </div>
+        <div id="welcome" style="display:none;">
+            <p id="welcomeText"></p>
+            <button id="logoutBtn">登出</button>
+        </div>
+    </section>
+
+    <!-- 上傳剩食 -->
+    <section id="upload" style="display:none;">
+        <h2>上傳剩食資訊</h2>
+        <form id="foodForm">
+            <input type="text" id="foodName" placeholder="食物名稱" required>
+            <input type="text" id="foodLocation" placeholder="位置" required>
+            <button type="button" id="useMyLocationBtn">使用我的位置</button>
+            <input type="file" id="foodImage" accept="image/*">
+            <button type="submit">上傳</button>
+        </form>
+        <div id="foodList"></div>
+    </section>
 
     <!-- 推薦剩食 -->
-    <main>
-        <section id="featured">
-            <h2>推薦剩食</h2>
-            <div class="item-list" id="featuredList">
-                <!-- 使用者上傳的剩食會出現在這裡 -->
-            </div>
-        </section>
+    <section id="featured">
+        <h2>推薦剩食</h2>
+        <div class="item-list" id="featuredList"></div>
+    </section>
 
-        <!-- 使用者登入/註冊 -->
-        <section id="user">
-            <h2>使用者系統</h2>
-            <div id="authForms">
-                <input type="text" id="username" placeholder="帳號">
-                <input type="password" id="password" placeholder="密碼">
-                <button id="loginBtn">登入</button>
-                <button id="registerBtn">註冊</button>
-            </div>
-            <div id="welcome" style="display:none;">
-                <p id="welcomeText"></p>
-                <button id="logoutBtn">登出</button>
-            </div>
-        </section>
+    <!-- 地圖 -->
+    <section id="map">
+        <h2>剩食地圖</h2>
+        <div id="mapid" style="height: 400px;"></div>
+    </section>
+</main>
 
-        <!-- 上傳剩食 -->
-        <section id="upload" style="display:none;">
-            <h2>上傳剩食資訊</h2>
-            <form id="foodForm">
-                <input type="text" id="foodName" placeholder="食物名稱" required>
-                <input type="text" id="foodLocation" placeholder="位置" required>
-                <input type="file" id="foodImage" accept="image/*">
-                <button type="submit">上傳</button>
-            </form>
-            <div id="foodList"></div>
-        </section>
-
-        <!-- 地圖 -->
-        <section id="map">
-            <h2>剩食地圖</h2>
-            <div id="mapid" style="height: 400px;"></div>
-        </section>
-    </main>
-
-    <!-- Footer -->
-    <footer>
-        <p>&copy; 2025 剩食平台</p>
-    </footer>
-
-    <!-- JS -->
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="js/main.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>

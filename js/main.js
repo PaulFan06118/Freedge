@@ -1,110 +1,141 @@
-// =====================
-// 使用者系統 (純前端)
-// =====================
+// ===== Firebase 設定 =====
+// TODO: 把下面改成你的 Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyDCnxi5yYqPMSnEojPfnXgqBE2_Oi-X1OY",
+  authDomain: "freedge-yzu.firebaseapp.com",
+  projectId: "freedge-yzu",
+  storageBucket: "freedge-yzu.firebasestorage.app",
+  messagingSenderId: "577649251490",
+  appId: "1:577649251490:web:9fb4af3ee7c4d9d06f33fb",
+  measurementId: "G-GVK312YLPL"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+// ===== 元素選取 =====
 const loginBtn = document.getElementById('loginBtn');
 const registerBtn = document.getElementById('registerBtn');
 const logoutBtn = document.getElementById('logoutBtn');
-const usernameInput = document.getElementById('username');
+const emailInput = document.getElementById('email');
 const passwordInput = document.getElementById('password');
 const authForms = document.getElementById('authForms');
 const welcome = document.getElementById('welcome');
 const welcomeText = document.getElementById('welcomeText');
 const uploadSection = document.getElementById('upload');
 
-let currentUser = localStorage.getItem('currentUser') || null;
+const form = document.getElementById('foodForm');
+const foodList = document.getElementById('foodList');
+const featuredList = document.getElementById('featuredList');
+const useMyLocationBtn = document.getElementById('useMyLocationBtn');
 
-// 更新畫面顯示狀態
-function updateUI() {
-    if(currentUser){
+let currentLatLng = null;
+
+// ===== 登入/註冊/登出 =====
+registerBtn.addEventListener('click', () => {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    if(!email || !password){ alert('請填寫完整'); return; }
+    auth.createUserWithEmailAndPassword(email, password)
+    .then(() => alert('註冊成功'))
+    .catch(err => alert(err.message));
+});
+
+loginBtn.addEventListener('click', () => {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    auth.signInWithEmailAndPassword(email, password)
+    .catch(err => alert(err.message));
+});
+
+logoutBtn.addEventListener('click', () => { auth.signOut(); });
+
+// 監聽登入狀態
+auth.onAuthStateChanged(user => {
+    if(user){
+        currentUser = user;
         authForms.style.display = 'none';
         welcome.style.display = 'block';
-        welcomeText.textContent = `歡迎, ${currentUser}`;
+        welcomeText.textContent = `歡迎, ${user.email}`;
         uploadSection.style.display = 'block';
+        loadFoods();
     } else {
+        currentUser = null;
         authForms.style.display = 'block';
         welcome.style.display = 'none';
         uploadSection.style.display = 'none';
-    }
-}
-updateUI();
-
-// 註冊帳號
-registerBtn.addEventListener('click', () => {
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
-    if(!username || !password){
-        alert('帳號密碼不可為空');
-        return;
-    }
-    let users = JSON.parse(localStorage.getItem('users') || '{}');
-    if(users[username]){
-        alert('帳號已存在');
-        return;
-    }
-    users[username] = btoa(password); // 簡單存密碼
-    localStorage.setItem('users', JSON.stringify(users));
-    alert('註冊成功');
-});
-
-// 登入帳號
-loginBtn.addEventListener('click', () => {
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
-    let users = JSON.parse(localStorage.getItem('users') || '{}');
-    if(users[username] && atob(users[username]) === password){
-        currentUser = username;
-        localStorage.setItem('currentUser', currentUser);
-        updateUI();
-    } else {
-        alert('帳號或密碼錯誤');
+        featuredList.innerHTML = '';
+        foodList.innerHTML = '';
     }
 });
 
-// 登出
-logoutBtn.addEventListener('click', () => {
-    currentUser = null;
-    localStorage.removeItem('currentUser');
-    updateUI();
-});
-
-// =====================
-// Leaflet 地圖
-// =====================
+// ===== Leaflet 地圖 =====
 var map = L.map('mapid').setView([25.033, 121.565], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 
-// =====================
-// 上傳剩食功能
-// =====================
-const form = document.getElementById('foodForm');
-const foodList = document.getElementById('foodList');
-const featuredList = document.getElementById('featuredList');
+// ===== 使用者位置 =====
+useMyLocationBtn.addEventListener('click', () => {
+    if(!navigator.geolocation){ alert('瀏覽器不支援'); return; }
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            currentLatLng = [pos.coords.latitude, pos.coords.longitude];
+            document.getElementById('foodLocation').value = `經度:${currentLatLng[1].toFixed(5)}, 緯度:${currentLatLng[0].toFixed(5)}`;
+        },
+        err => alert('無法取得位置')
+    );
+});
 
-form.addEventListener('submit', function(e){
+// ===== 上傳剩食 =====
+form.addEventListener('submit', e => {
     e.preventDefault();
-
-    // 確認使用者已登入
-    if(!currentUser){
-        alert('請先登入才能上傳剩食');
-        return;
-    }
+    if(!currentUser){ alert('請先登入'); return; }
 
     const name = document.getElementById('foodName').value;
     const loc = document.getElementById('foodLocation').value;
     const fileInput = document.getElementById('foodImage');
-    const file = fileInput.files[0];
+    let fileData = '';
 
-    // ----- 推薦區塊 -----
+    if(fileInput.files[0]){
+        fileData = URL.createObjectURL(fileInput.files[0]);
+    }
+
+    const foodData = {
+        user: currentUser.email,
+        name, location: loc,
+        latLng: currentLatLng,
+        image: fileData,
+        timestamp: Date.now()
+    };
+
+    const newRef = db.ref('foods').push();
+    newRef.set(foodData);
+
+    form.reset();
+    currentLatLng = null;
+});
+
+// ===== 讀取剩食 =====
+function loadFoods(){
+    db.ref('foods').on('value', snapshot => {
+        featuredList.innerHTML = '';
+        foodList.innerHTML = '';
+        snapshot.forEach(snap => addFoodToPage(snap.val()));
+    });
+}
+
+// ===== 顯示剩食 =====
+function addFoodToPage(f){
+    // 推薦區
     const itemDiv = document.createElement('div');
     itemDiv.className = 'item';
     const itemText = document.createElement('p');
-    itemText.textContent = name;
+    itemText.textContent = f.name;
     itemDiv.appendChild(itemText);
-    if(file){
+    if(f.image){
         const itemImg = document.createElement('img');
-        itemImg.src = URL.createObjectURL(file);
+        itemImg.src = f.image;
         itemImg.style.width = '100px';
         itemImg.style.height = '100px';
         itemImg.style.objectFit = 'cover';
@@ -112,27 +143,26 @@ form.addEventListener('submit', function(e){
     }
     featuredList.appendChild(itemDiv);
 
-    // ----- 顯示文字區塊 -----
+    // 列表區
     const div = document.createElement('div');
     div.style.marginTop = '10px';
     const text = document.createElement('p');
-    text.textContent = `食物: ${name} / 地點: ${loc}`;
+    text.textContent = `食物: ${f.name} / 地點: ${f.location}`;
     div.appendChild(text);
-    if(file){
+    if(f.image){
         const img = document.createElement('img');
+        img.src = f.image;
         img.style.width = '200px';
         img.style.height = '150px';
         img.style.objectFit = 'cover';
         img.style.marginTop = '5px';
-        img.src = URL.createObjectURL(file);
         div.appendChild(img);
     }
     foodList.appendChild(div);
 
-    // ----- 地圖新增標記 -----
-    L.marker([25.033 + Math.random()/100, 121.565 + Math.random()/100])
+    // 地圖標記
+    let markerLatLng = f.latLng || [25.033 + Math.random()/100, 121.565 + Math.random()/100];
+    L.marker(markerLatLng)
      .addTo(map)
-     .bindPopup(`<b>${name}</b><br>${loc}`);
-
-    form.reset();
-});
+     .bindPopup(`<b>${f.name}</b><br>${f.location}`);
+}
