@@ -1,11 +1,9 @@
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-// ===== Supabase 設定 =====
-const SUPABASE_URL = "https://lykatdkwgukjgiaudgat.supabase.co";       // 你的 Supabase 專案 URL
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx5a2F0ZGt3Z3VramdpYXVkZ2F0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTgwMjgsImV4cCI6MjA4MDY3NDAyOH0.sCkKjULRtFXwu-uD_OMMT1Cm7jr6jqVGx7P2Ch1nyKY"; // 你的 ANON KEY
+import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+const supabaseUrl = 'https://lykatdkwgukjgiaudgat.supabase.co'
+const supabaseKey = process.env.SUPABASE_KEY
+const supabase = createClient(supabaseUrl, supabaseKey)
 // ===== 元素選取 =====
 const registerBtn = document.getElementById('registerBtn');
 const loginBtn = document.getElementById('loginBtn');
