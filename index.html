@@ -48,5 +48,35 @@
     </section>
 
     <script src="js/main.js"></script>
+    <input type="file" id="img" />
+    <button onclick="upload()">上傳圖片</button>
+
+    <div id="result"></div>
+
+    <script>
+    async function upload() {
+        const file = document.getElementById("img").files[0];
+        if (!file) return alert("請選擇圖片!");
+
+        const form = new FormData();
+        form.append("reqtype", "fileupload");
+        form.append("userhash", ""); // 匿名即可
+        form.append("fileToUpload", file);
+
+        const res = await fetch("https://catbox.moe/user/api.php", {
+            method: "POST",
+            body: form
+        });
+
+        const url = await res.text(); // 圖片 URL，例如 https://files.catbox.moe/xxxxx.png
+
+        document.getElementById("result").innerHTML = `
+            <p>圖片已上傳！</p>
+            <a href="${url}" target="_blank">${url}</a><br>
+            <img src="${url}" style="max-width:200px; margin-top:10px;">
+        `;
+    }
+    </script>
+
 </body>
 </html>
