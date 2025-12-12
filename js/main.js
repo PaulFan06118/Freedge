@@ -1,10 +1,10 @@
-// ====== 初始化 Firebase（請填入你自己的設定） ======
+// ====== 初始化 Firebase ======
 const firebaseConfig = {
     apiKey: "AIzaSyDCnxi5yYqPMSnEojPfnXgqBE2_Oi-X1OY",
     authDomain: "freedge-yzu.firebaseapp.com",
     databaseURL: "https://freedge-yzu-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "freedge-yzu",
-    appId: "1:577649251490:web:9fb4af3ee7c4d9d06f33fb",
+    appId: "1:577649251490:web:9fb4af3ee7c4d9d06f33fb"
 };
 firebase.initializeApp(firebaseConfig);
 
@@ -14,7 +14,7 @@ const db = firebase.database();
 // ====== Leaflet 地圖 ======
 let map = L.map('mapid').setView([25.0330, 121.5654], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-let markers = {}; // 存 markers
+let markers = {}; 
 
 // ====== DOM 元素 ======
 const emailInput = document.getElementById("email");
@@ -37,12 +37,12 @@ let tempLon = null;
 // ====== Auth ======
 registerBtn.addEventListener("click", async () => {
     try { await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value); alert("註冊成功！"); }
-    catch (e) { console.error(e); alert("註冊失敗：" + e.message); }
+    catch (e) { alert("註冊失敗：" + e.message); }
 });
 
 loginBtn.addEventListener("click", async () => {
     try { await auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value); }
-    catch (e) { console.error(e); alert("登入失敗：" + e.message); }
+    catch (e) { alert("登入失敗：" + e.message); }
 });
 
 logoutBtn.addEventListener("click", () => auth.signOut());
@@ -74,7 +74,6 @@ useMyLocationBtn.addEventListener("click", () => {
         foodLocationInput.value = `我的位置 (lat:${tempLat.toFixed(5)}, lon:${tempLon.toFixed(5)})`;
         map.setView([tempLat, tempLon], 15);
     }, err => {
-        console.error(err);
         alert("取得位置失敗: " + (err.message || err.code));
         useMyLocationBtn.disabled = false;
         useMyLocationBtn.textContent = "使用我的位置";
@@ -91,52 +90,36 @@ foodForm.addEventListener("submit", async (e) => {
     const locationText = foodLocationInput.value.trim();
     const file = foodImageInput.files[0];
 
-    if (!name) return alert("請填寫食物名稱。");
-    if (!locationText && tempLat === null) return alert("請填寫位置或使用「使用我的位置」。");
-    if (!file) return alert("請選擇圖片。");
+    if (!name || !file || (!locationText && tempLat === null)) return alert("請完整填寫資訊並選擇圖片。");
 
-    try {
-        // ====== 將圖片轉 base64 ======
-        const reader = new FileReader();
-        reader.onload = async function(event) {
-            const base64Image = event.target.result;
+    const reader = new FileReader();
+    reader.onload = async function(event) {
+        const base64Image = event.target.result;
 
-            // ====== 取得經緯度 ======
-            let lat = tempLat;
-            let lon = tempLon;
-            if (lat === null) {
-                // 如果沒 GPS，就保留文字位置（或你可加 geocoding）
-                lat = 0;
-                lon = 0;
-            }
+        let lat = tempLat ?? 0;
+        let lon = tempLon ?? 0;
 
-            // ====== 儲存到 Firebase ======
-            const newRef = db.ref("foods").push();
-            await newRef.set({
-                name,
-                locationText,
-                lat,
-                lon,
-                imageUrl: base64Image,
-                ownerUid: user.uid,
-                ownerEmail: user.email || null,
-                claimedBy: null,
-                claimedAt: null,
-                createdAt: Date.now()
-            });
+        const newRef = db.ref("foods").push();
+        await newRef.set({
+            name,
+            locationText,
+            lat,
+            lon,
+            imageUrl: base64Image,
+            ownerUid: user.uid,
+            ownerEmail: user.email || null,
+            claimedBy: null,
+            claimedAt: null,
+            createdAt: Date.now()
+        });
 
-            tempLat = null;
-            tempLon = null;
-            useMyLocationBtn.textContent = "使用我的位置";
-            foodForm.reset();
-            alert("上傳成功！");
-        };
-        reader.readAsDataURL(file);
-
-    } catch (err) {
-        console.error("上傳錯誤", err);
-        alert("上傳失敗：" + (err.message || err));
-    }
+        tempLat = null;
+        tempLon = null;
+        useMyLocationBtn.textContent = "使用我的位置";
+        foodForm.reset();
+        alert("上傳成功！");
+    };
+    reader.readAsDataURL(file);
 });
 
 // ====== 讀取資料 ======
@@ -147,7 +130,7 @@ function loadFoods() {
         const data = snapshot.val() || {};
         renderFoodList(data);
         renderMapMarkers(data);
-    }, err => console.error("讀取 foods 失敗:", err));
+    });
 }
 
 // ====== 清地圖 ======
@@ -161,17 +144,12 @@ function renderMapMarkers(data) {
     clearAllMarkers();
     for (const id in data) {
         const f = data[id];
-        if (typeof f.lat !== "number" && typeof f.lat !== "string") continue;
         const lat = parseFloat(f.lat);
         const lon = parseFloat(f.lon);
         if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
 
         const iconUrl = f.claimedBy ? "https://i.imgur.com/1FH0pPh.png" : "https://i.imgur.com/Hu1QG5H.png";
         const marker = L.marker([lat, lon], { icon: L.icon({iconUrl, iconSize:[36,36]}) }).addTo(map);
-
-        const popupIdClaim = `claim_${id}`;
-        const popupIdConfirm = `confirm_${id}`;
-        const popupIdRemove = `remove_${id}`;
 
         let popupHtml = `<div style="min-width:180px">
             <b>${escapeHtml(f.name)}</b><br>
@@ -181,18 +159,18 @@ function renderMapMarkers(data) {
             <div style="margin-top:6px;">`;
 
         const currentUser = auth.currentUser;
-        if (!f.claimedBy && currentUser && f.ownerUid !== currentUser.uid) popupHtml += `<button id="${popupIdClaim}">領取</button> `;
-        if (f.claimedBy && currentUser && f.claimedBy === (currentUser.email || currentUser.uid)) popupHtml += `<button id="${popupIdConfirm}">確認領取</button> `;
-        if (currentUser && f.ownerUid === currentUser.uid) popupHtml += `<button id="${popupIdRemove}">收回</button>`;
+        if (!f.claimedBy && currentUser && f.ownerUid !== currentUser.uid) popupHtml += `<button id="claim_${id}">領取</button> `;
+        if (f.claimedBy && currentUser && f.claimedBy === (currentUser.email || currentUser.uid)) popupHtml += `<button id="confirm_${id}">確認領取</button> `;
+        if (currentUser && f.ownerUid === currentUser.uid) popupHtml += `<button id="remove_${id}">收回</button>`;
         popupHtml += `</div></div>`;
 
         marker.bindPopup(popupHtml);
         marker.on('popupopen', () => {
-            const claimBtn = document.getElementById(popupIdClaim);
+            const claimBtn = document.getElementById(`claim_${id}`);
             if (claimBtn) claimBtn.onclick = async () => { await claimFoodTransaction(id); marker.closePopup(); };
-            const confirmBtn = document.getElementById(popupIdConfirm);
+            const confirmBtn = document.getElementById(`confirm_${id}`);
             if (confirmBtn) confirmBtn.onclick = async () => { await confirmFood(id); marker.closePopup(); };
-            const removeBtn = document.getElementById(popupIdRemove);
+            const removeBtn = document.getElementById(`remove_${id}`);
             if (removeBtn) removeBtn.onclick = async () => { if(confirm("確定收回？")) await removeFood(id); marker.closePopup(); };
         });
         markers[id] = marker;
