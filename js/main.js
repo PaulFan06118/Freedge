@@ -11,6 +11,16 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
 
+// ====== Leaflet 地圖 ======
+let map = L.map('mapid').setView([25.0330, 121.5654], 13); // 台北市
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+}).addTo(map);
+
+// 用來存 marker，方便更新/刪除
+let markers = {};
+
 // ====== DOM 元素 ======
 const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
@@ -26,7 +36,7 @@ const foodListDiv = document.getElementById("foodList");
 // ====== 使用者登入/登出 ======
 registerBtn.addEventListener("click", async () => {
     try {
-        const userCredential = await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value);
+        await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value);
         alert("註冊成功!");
     } catch(e) { alert(e.message); }
 });
@@ -50,8 +60,17 @@ auth.onAuthStateChanged(user => {
         welcomeSection.style.display = "none";
         uploadSection.style.display = "none";
         foodListDiv.innerHTML = "";
+        clearAllMarkers();
     }
 });
+
+// ====== 清除所有地圖標記 ======
+function clearAllMarkers(){
+    for(let id in markers){
+        map.removeLayer(markers[id]);
+    }
+    markers = {};
+}
 
 // ====== 上傳剩食資訊 ======
 foodForm.addEventListener("submit", async (e) => {
@@ -71,11 +90,20 @@ foodForm.addEventListener("submit", async (e) => {
     const res = await fetch("https://catbox.moe/user/api.php", { method:"POST", body:formData });
     const imageUrl = await res.text();
 
+    // 將位置轉成經緯度（使用 Nominatim API）
+    const geo = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(foodLocation)}`);
+    const geoData = await geo.json();
+    if(!geoData.length) return alert("找不到該地址");
+
+    const lat = parseFloat(geoData[0].lat);
+    const lon = parseFloat(geoData[0].lon);
+
     // 存到 Firebase
-    const newFoodRef = db.ref("foods").push();
-    await newFoodRef.set({
+    await db.ref("foods").push({
         name: foodName,
         location: foodLocation,
+        lat: lat,
+        lon: lon,
         imageUrl: imageUrl,
         owner: auth.currentUser.email,
         claimedBy: null,
@@ -86,56 +114,79 @@ foodForm.addEventListener("submit", async (e) => {
     foodForm.reset();
 });
 
-// ====== 載入剩食列表 ======
+// ====== 讀取食物資料 ======
 function loadFoods(){
     const foodsRef = db.ref("foods");
-    foodsRef.off(); // 先移除舊監聽
+    foodsRef.off();
     foodsRef.on("value", snapshot => {
         const data = snapshot.val() || {};
         renderFoodList(data);
+        renderMapMarkers(data);
     });
 }
 
-// ====== 渲染列表 ======
+// ====== 顯示在地圖上 ======
+function renderMapMarkers(data){
+    clearAllMarkers();
+    for(const id in data){
+        const f = data[id];
+
+        const icon = L.icon({
+            iconUrl: f.claimedBy ? "https://i.imgur.com/1FH0pPh.png" : "https://i.imgur.com/Hu1QG5H.png",
+            iconSize: [35, 35]
+        });
+
+        const marker = L.marker([f.lat, f.lon], { icon }).addTo(map);
+
+        marker.bindPopup(`
+            <b>${f.name}</b><br>
+            <img src="${f.imageUrl}" width="120"><br>
+            <small>上傳者：${f.owner}</small><br>
+            ${f.claimedBy ? `<small>已被 ${f.claimedBy} 領取</small>` : ""}
+        `);
+
+        markers[id] = marker;
+    }
+}
+
+// ====== 渲染文字列表 ======
 function renderFoodList(data){
     foodListDiv.innerHTML = "";
     const user = auth.currentUser;
-    Object.entries(data).forEach(([id, food]) => {
+
+    Object.entries(data).forEach(([id, f]) => {
         const div = document.createElement("div");
         div.className = "foodItem";
+
         div.innerHTML = `
-            <h3>${food.name}</h3>
-            <p>位置：${food.location}</p>
-            <img src="${food.imageUrl}" style="max-width:200px;">
-            <p>上傳者：${food.owner}</p>
-            ${food.claimedBy ? `<p>已被 ${food.claimedBy} 領取 (${new Date(food.claimedAt).toLocaleString()})</p>` : ""}
+            <h3>${f.name}</h3>
+            <p>位置：${f.location}</p>
+            <img src="${f.imageUrl}" style="max-width:200px;">
+            <p>上傳者：${f.owner}</p>
+            ${f.claimedBy ? `<p>已被 ${f.claimedBy} 領取 (${new Date(f.claimedAt).toLocaleString()})</p>` : ""}
         `;
 
-        // 按鈕區域
-        const btnDiv = document.createElement("div");
+        let btnDiv = document.createElement("div");
 
-        // 如果還沒領取，其他使用者可以領取
-        if(!food.claimedBy && food.owner !== user.email){
-            const claimBtn = document.createElement("button");
-            claimBtn.textContent = "領取";
-            claimBtn.onclick = () => claimFood(id, food);
-            btnDiv.appendChild(claimBtn);
+        if(!f.claimedBy && f.owner !== user.email){
+            const btn = document.createElement("button");
+            btn.innerText = "領取";
+            btn.onclick = () => claimFood(id);
+            btnDiv.appendChild(btn);
         }
 
-        // 如果已被自己領取，顯示確認領取
-        if(food.claimedBy === user.email){
-            const confirmBtn = document.createElement("button");
-            confirmBtn.textContent = "確認領取";
-            confirmBtn.onclick = () => confirmFood(id);
-            btnDiv.appendChild(confirmBtn);
+        if(f.claimedBy === user.email){
+            const btn = document.createElement("button");
+            btn.innerText = "確認領取";
+            btn.onclick = () => confirmFood(id);
+            btnDiv.appendChild(btn);
         }
 
-        // 如果是上傳者，顯示收回按鈕
-        if(food.owner === user.email){
-            const removeBtn = document.createElement("button");
-            removeBtn.textContent = "收回";
-            removeBtn.onclick = () => removeFood(id);
-            btnDiv.appendChild(removeBtn);
+        if(f.owner === user.email){
+            const btn = document.createElement("button");
+            btn.innerText = "收回";
+            btn.onclick = () => removeFood(id);
+            btnDiv.appendChild(btn);
         }
 
         div.appendChild(btnDiv);
@@ -143,21 +194,20 @@ function renderFoodList(data){
     });
 }
 
-// ====== 領取 ======
-function claimFood(id, food){
-    const updates = {
+// ====== 功能：領取 ======
+function claimFood(id){
+    db.ref(`foods/${id}`).update({
         claimedBy: auth.currentUser.email,
         claimedAt: Date.now()
-    };
-    db.ref(`foods/${id}`).update(updates);
+    });
 }
 
-// ====== 確認領取 ======
+// ====== 功能：確認領取（刪除） ======
 function confirmFood(id){
     db.ref(`foods/${id}`).remove();
 }
 
-// ====== 收回 ======
+// ====== 功能：上傳者收回 ======
 function removeFood(id){
     db.ref(`foods/${id}`).remove();
 }

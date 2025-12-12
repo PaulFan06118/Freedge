@@ -1,213 +1,82 @@
-// ====== 初始化 Firebase ======
-const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT.firebaseio.com",
-    projectId: "YOUR_PROJECT",
-    appId: "YOUR_APP_ID"
-};
-firebase.initializeApp(firebaseConfig);
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>剩食平台</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>剩食平台</h1>
+    </header>
 
-const auth = firebase.auth();
-const db = firebase.database();
+    <section id="authForms">
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Password">
+        <button id="registerBtn">註冊</button>
+        <button id="loginBtn">登入</button>
+    </section>
 
-// ====== Leaflet 地圖 ======
-let map = L.map('mapid').setView([25.0330, 121.5654], 13); // 台北市
+    <section id="welcome" style="display:none;">
+        <p id="welcomeText"></p>
+        <button id="logoutBtn">登出</button>
+    </section>
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19
-}).addTo(map);
+    <section id="upload" style="display:none;">
+        <h2>上傳剩食資訊</h2>
+        <button id="useMyLocationBtn">使用我的位置</button>
+        <form id="foodForm">
+            <input type="text" id="foodName" placeholder="食物名稱" required>
+            <input type="text" id="foodLocation" placeholder="位置" required>
+            <input type="file" id="foodImage" accept="image/*">
+            <button type="submit">上傳</button>
+        </form>
+        <div id="featuredList"></div>
+        <div id="foodList"></div>
+    </section>
 
-// 用來存 marker，方便更新/刪除
-let markers = {};
+    <section id="map">
+        <h2>剩食地圖</h2>
+        <div id="mapid" style="height:400px;"></div>
+    </section>
 
-// ====== DOM 元素 ======
-const emailInput = document.getElementById("email");
-const passwordInput = document.getElementById("password");
-const registerBtn = document.getElementById("registerBtn");
-const loginBtn = document.getElementById("loginBtn");
-const logoutBtn = document.getElementById("logoutBtn");
-const welcomeSection = document.getElementById("welcome");
-const uploadSection = document.getElementById("upload");
-const welcomeText = document.getElementById("welcomeText");
-const foodForm = document.getElementById("foodForm");
-const foodListDiv = document.getElementById("foodList");
+    <script src="js/main.js"></script>
+    <input type="file" id="img" />
+    <button onclick="upload()">上傳圖片</button>
 
-// ====== 使用者登入/登出 ======
-registerBtn.addEventListener("click", async () => {
-    try {
-        await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value);
-        alert("註冊成功!");
-    } catch(e) { alert(e.message); }
-});
+    <div id="result"></div>
 
-loginBtn.addEventListener("click", async () => {
-    try {
-        await auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value);
-    } catch(e) { alert(e.message); }
-});
+    <script>
+    async function upload() {
+        const file = document.getElementById("img").files[0];
+        if (!file) return alert("請選擇圖片!");
 
-logoutBtn.addEventListener("click", () => auth.signOut());
+        const form = new FormData();
+        form.append("reqtype", "fileupload");
+        form.append("userhash", ""); // 匿名即可
+        form.append("fileToUpload", file);
 
-// ====== 監聽登入狀態 ======
-auth.onAuthStateChanged(user => {
-    if(user){
-        welcomeSection.style.display = "block";
-        uploadSection.style.display = "block";
-        welcomeText.textContent = `歡迎，${user.email}`;
-        loadFoods();
-    } else {
-        welcomeSection.style.display = "none";
-        uploadSection.style.display = "none";
-        foodListDiv.innerHTML = "";
-        clearAllMarkers();
-    }
-});
-
-// ====== 清除所有地圖標記 ======
-function clearAllMarkers(){
-    for(let id in markers){
-        map.removeLayer(markers[id]);
-    }
-    markers = {};
-}
-
-// ====== 上傳剩食資訊 ======
-foodForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const foodName = document.getElementById("foodName").value;
-    const foodLocation = document.getElementById("foodLocation").value;
-    const foodImageFile = document.getElementById("foodImage").files[0];
-
-    if(!foodImageFile) return alert("請選擇圖片!");
-
-    // 上傳到 Catbox
-    const formData = new FormData();
-    formData.append("reqtype","fileupload");
-    formData.append("userhash","");
-    formData.append("fileToUpload", foodImageFile);
-
-    const res = await fetch("https://catbox.moe/user/api.php", { method:"POST", body:formData });
-    const imageUrl = await res.text();
-
-    // 將位置轉成經緯度（使用 Nominatim API）
-    const geo = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(foodLocation)}`);
-    const geoData = await geo.json();
-    if(!geoData.length) return alert("找不到該地址");
-
-    const lat = parseFloat(geoData[0].lat);
-    const lon = parseFloat(geoData[0].lon);
-
-    // 存到 Firebase
-    await db.ref("foods").push({
-        name: foodName,
-        location: foodLocation,
-        lat: lat,
-        lon: lon,
-        imageUrl: imageUrl,
-        owner: auth.currentUser.email,
-        claimedBy: null,
-        claimedAt: null,
-        createdAt: Date.now()
-    });
-
-    foodForm.reset();
-});
-
-// ====== 讀取食物資料 ======
-function loadFoods(){
-    const foodsRef = db.ref("foods");
-    foodsRef.off();
-    foodsRef.on("value", snapshot => {
-        const data = snapshot.val() || {};
-        renderFoodList(data);
-        renderMapMarkers(data);
-    });
-}
-
-// ====== 顯示在地圖上 ======
-function renderMapMarkers(data){
-    clearAllMarkers();
-    for(const id in data){
-        const f = data[id];
-
-        const icon = L.icon({
-            iconUrl: f.claimedBy ? "https://i.imgur.com/1FH0pPh.png" : "https://i.imgur.com/Hu1QG5H.png",
-            iconSize: [35, 35]
+        const res = await fetch("https://catbox.moe/user/api.php", {
+            method: "POST",
+            body: form
         });
 
-        const marker = L.marker([f.lat, f.lon], { icon }).addTo(map);
+        const url = await res.text(); // 圖片 URL，例如 https://files.catbox.moe/xxxxx.png
 
-        marker.bindPopup(`
-            <b>${f.name}</b><br>
-            <img src="${f.imageUrl}" width="120"><br>
-            <small>上傳者：${f.owner}</small><br>
-            ${f.claimedBy ? `<small>已被 ${f.claimedBy} 領取</small>` : ""}
-        `);
-
-        markers[id] = marker;
-    }
-}
-
-// ====== 渲染文字列表 ======
-function renderFoodList(data){
-    foodListDiv.innerHTML = "";
-    const user = auth.currentUser;
-
-    Object.entries(data).forEach(([id, f]) => {
-        const div = document.createElement("div");
-        div.className = "foodItem";
-
-        div.innerHTML = `
-            <h3>${f.name}</h3>
-            <p>位置：${f.location}</p>
-            <img src="${f.imageUrl}" style="max-width:200px;">
-            <p>上傳者：${f.owner}</p>
-            ${f.claimedBy ? `<p>已被 ${f.claimedBy} 領取 (${new Date(f.claimedAt).toLocaleString()})</p>` : ""}
+        document.getElementById("result").innerHTML = `
+            <p>圖片已上傳！</p>
+            <a href="${url}" target="_blank">${url}</a><br>
+            <img src="${url}" style="max-width:200px; margin-top:10px;">
         `;
+    }
+    </script>
 
-        let btnDiv = document.createElement("div");
-
-        if(!f.claimedBy && f.owner !== user.email){
-            const btn = document.createElement("button");
-            btn.innerText = "領取";
-            btn.onclick = () => claimFood(id);
-            btnDiv.appendChild(btn);
-        }
-
-        if(f.claimedBy === user.email){
-            const btn = document.createElement("button");
-            btn.innerText = "確認領取";
-            btn.onclick = () => confirmFood(id);
-            btnDiv.appendChild(btn);
-        }
-
-        if(f.owner === user.email){
-            const btn = document.createElement("button");
-            btn.innerText = "收回";
-            btn.onclick = () => removeFood(id);
-            btnDiv.appendChild(btn);
-        }
-
-        div.appendChild(btnDiv);
-        foodListDiv.appendChild(div);
-    });
-}
-
-// ====== 功能：領取 ======
-function claimFood(id){
-    db.ref(`foods/${id}`).update({
-        claimedBy: auth.currentUser.email,
-        claimedAt: Date.now()
-    });
-}
-
-// ====== 功能：確認領取（刪除） ======
-function confirmFood(id){
-    db.ref(`foods/${id}`).remove();
-}
-
-// ====== 功能：上傳者收回 ======
-function removeFood(id){
-    db.ref(`foods/${id}`).remove();
-}
+</body>
+</html>
