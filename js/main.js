@@ -12,11 +12,9 @@ const auth = firebase.auth();
 const db = firebase.database();
 
 // ====== Leaflet 地圖 ======
-let map = L.map('mapid').setView([25.0330, 121.5654], 13); // 預設台北
+let map = L.map('mapid').setView([25.0330, 121.5654], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-
-// markers 儲存，方便更新/刪除
-let markers = {};
+let markers = {}; // 存 markers
 
 // ====== DOM 元素 ======
 const emailInput = document.getElementById("email");
@@ -33,28 +31,18 @@ const useMyLocationBtn = document.getElementById("useMyLocationBtn");
 const foodLocationInput = document.getElementById("foodLocation");
 const foodImageInput = document.getElementById("foodImage");
 
-// 用來暫存用 GPS 取得的經緯度（若使用者按了「使用我的位置」）
 let tempLat = null;
 let tempLon = null;
 
-// ====== Auth 操作 ======
+// ====== Auth ======
 registerBtn.addEventListener("click", async () => {
-    try {
-        await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value);
-        alert("註冊成功！");
-    } catch (e) {
-        console.error(e);
-        alert("註冊失敗：" + e.message);
-    }
+    try { await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value); alert("註冊成功！"); }
+    catch (e) { console.error(e); alert("註冊失敗：" + e.message); }
 });
 
 loginBtn.addEventListener("click", async () => {
-    try {
-        await auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value);
-    } catch (e) {
-        console.error(e);
-        alert("登入失敗：" + e.message);
-    }
+    try { await auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value); }
+    catch (e) { console.error(e); alert("登入失敗：" + e.message); }
 });
 
 logoutBtn.addEventListener("click", () => auth.signOut());
@@ -73,11 +61,9 @@ auth.onAuthStateChanged(user => {
     }
 });
 
-// ====== 取得使用者 GPS ======
+// ====== 使用者 GPS ======
 useMyLocationBtn.addEventListener("click", () => {
-    if (!navigator.geolocation) {
-        return alert("你的瀏覽器不支援地理位置定位。");
-    }
+    if (!navigator.geolocation) return alert("你的瀏覽器不支援地理位置定位。");
     useMyLocationBtn.disabled = true;
     useMyLocationBtn.textContent = "取得中...";
     navigator.geolocation.getCurrentPosition(pos => {
@@ -86,7 +72,6 @@ useMyLocationBtn.addEventListener("click", () => {
         useMyLocationBtn.textContent = "已使用我的位置";
         useMyLocationBtn.disabled = false;
         foodLocationInput.value = `我的位置 (lat:${tempLat.toFixed(5)}, lon:${tempLon.toFixed(5)})`;
-        // 將地圖移到使用者位置
         map.setView([tempLat, tempLon], 15);
     }, err => {
         console.error(err);
@@ -96,7 +81,7 @@ useMyLocationBtn.addEventListener("click", () => {
     }, { enableHighAccuracy: true, timeout: 10000 });
 });
 
-// ====== 上傳表單處理 ======
+// ====== 上傳表單 ======
 foodForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const user = auth.currentUser;
@@ -111,60 +96,50 @@ foodForm.addEventListener("submit", async (e) => {
     if (!file) return alert("請選擇圖片。");
 
     try {
-        // 1) 上傳圖片到 Catbox（匿名）
-        const formData = new FormData();
-        formData.append("reqtype", "fileupload");
-        formData.append("userhash", "");
-        formData.append("fileToUpload", file);
+        // ====== 將圖片轉 base64 ======
+        const reader = new FileReader();
+        reader.onload = async function(event) {
+            const base64Image = event.target.result;
 
-        const r = await fetch("https://catbox.moe/user/api.php", { method: "POST", body: formData });
-        if (!r.ok) throw new Error("圖片上傳失敗，status: " + r.status);
-        const imageUrl = (await r.text()).trim();
-        console.log("Catbox image url:", imageUrl);
-
-        // 2) 取得經緯度：如果使用者按了 GPS（tempLat/tempLon 不為 null），就用它；否則用 Nominatim 解析地址
-        let lat = tempLat;
-        let lon = tempLon;
-        if (lat === null) {
-            // 用 Nominatim geocode
-            const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationText)}`);
-            const geoJson = await geoRes.json();
-            if (!geoJson || !geoJson.length) {
-                return alert("地址無法解析為經緯度，請確認位置文字是否正確。");
+            // ====== 取得經緯度 ======
+            let lat = tempLat;
+            let lon = tempLon;
+            if (lat === null) {
+                // 如果沒 GPS，就保留文字位置（或你可加 geocoding）
+                lat = 0;
+                lon = 0;
             }
-            lat = parseFloat(geoJson[0].lat);
-            lon = parseFloat(geoJson[0].lon);
-        }
 
-        // 3) Push 到 Firebase Realtime Database
-        const newRef = db.ref("foods").push();
-        await newRef.set({
-            name,
-            locationText,
-            lat,
-            lon,
-            imageUrl,
-            ownerUid: user.uid,
-            ownerEmail: user.email || null,
-            claimedBy: null,
-            claimedAt: null,
-            createdAt: Date.now()
-        });
+            // ====== 儲存到 Firebase ======
+            const newRef = db.ref("foods").push();
+            await newRef.set({
+                name,
+                locationText,
+                lat,
+                lon,
+                imageUrl: base64Image,
+                ownerUid: user.uid,
+                ownerEmail: user.email || null,
+                claimedBy: null,
+                claimedAt: null,
+                createdAt: Date.now()
+            });
 
-        // 清除暫存位置（避免下次誤用）
-        tempLat = null;
-        tempLon = null;
-        useMyLocationBtn.textContent = "使用我的位置";
+            tempLat = null;
+            tempLon = null;
+            useMyLocationBtn.textContent = "使用我的位置";
+            foodForm.reset();
+            alert("上傳成功！");
+        };
+        reader.readAsDataURL(file);
 
-        foodForm.reset();
-        alert("上傳成功！");
     } catch (err) {
         console.error("上傳錯誤", err);
         alert("上傳失敗：" + (err.message || err));
     }
 });
 
-// ====== 載入與監聽資料 ======
+// ====== 讀取資料 ======
 function loadFoods() {
     const foodsRef = db.ref("foods");
     foodsRef.off();
@@ -172,233 +147,101 @@ function loadFoods() {
         const data = snapshot.val() || {};
         renderFoodList(data);
         renderMapMarkers(data);
-    }, err => {
-        console.error("讀取 foods 失敗:", err);
-    });
+    }, err => console.error("讀取 foods 失敗:", err));
 }
 
-// ====== 清除地圖 markers ======
+// ====== 清地圖 ======
 function clearAllMarkers() {
-    for (const k in markers) {
-        try { map.removeLayer(markers[k]); } catch(e) {}
-    }
+    for (const k in markers) { try { map.removeLayer(markers[k]); } catch(e) {} }
     markers = {};
 }
 
-// ====== 在地圖上畫 markers ======
+// ====== marker 與 popup ======
 function renderMapMarkers(data) {
     clearAllMarkers();
     for (const id in data) {
         const f = data[id];
-        // icon 根據是否已被領取調整
-        const iconUrl = f.claimedBy ? "https://i.imgur.com/1FH0pPh.png" : "https://i.imgur.com/Hu1QG5H.png";
-        const icon = L.icon({ iconUrl, iconSize: [36, 36] });
-
-        // 有些資料若沒 lat/lon 就跳過
         if (typeof f.lat !== "number" && typeof f.lat !== "string") continue;
-
         const lat = parseFloat(f.lat);
         const lon = parseFloat(f.lon);
         if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
 
-        const marker = L.marker([lat, lon], { icon }).addTo(map);
+        const iconUrl = f.claimedBy ? "https://i.imgur.com/1FH0pPh.png" : "https://i.imgur.com/Hu1QG5H.png";
+        const marker = L.marker([lat, lon], { icon: L.icon({iconUrl, iconSize:[36,36]}) }).addTo(map);
 
-        // popup HTML：我們會在 popup 裡放按鈕（按鈕有唯一 id）
         const popupIdClaim = `claim_${id}`;
         const popupIdConfirm = `confirm_${id}`;
         const popupIdRemove = `remove_${id}`;
 
         let popupHtml = `<div style="min-width:180px">
             <b>${escapeHtml(f.name)}</b><br>
-            <img src="${escapeHtml(f.imageUrl)}" width="160" style="display:block;margin:6px 0;"><br>
+            <img src="${f.imageUrl}" width="160" style="display:block;margin:6px 0;"><br>
             <small>上傳者：${escapeHtml(f.ownerEmail || "匿名")}</small><br>
             ${f.claimedBy ? `<small>已被 ${escapeHtml(f.claimedBy)} 領取 (${f.claimedAt ? new Date(f.claimedAt).toLocaleString() : ""})</small><br>` : ""}
-            <div style="margin-top:6px;">
-        `;
+            <div style="margin-top:6px;">`;
 
-        // 領取按鈕（若未被領取且不是上傳者）
         const currentUser = auth.currentUser;
-        if (!f.claimedBy && currentUser && f.ownerUid !== currentUser.uid) {
-            popupHtml += `<button id="${popupIdClaim}">領取</button> `;
-        }
-
-        // 確認領取（領取人可見）
-        if (f.claimedBy && currentUser && f.claimedBy === (currentUser.email || currentUser.uid)) {
-            popupHtml += `<button id="${popupIdConfirm}">確認領取</button> `;
-        }
-
-        // 收回（上傳者可見）
-        if (currentUser && f.ownerUid === currentUser.uid) {
-            popupHtml += `<button id="${popupIdRemove}">收回</button>`;
-        }
-
+        if (!f.claimedBy && currentUser && f.ownerUid !== currentUser.uid) popupHtml += `<button id="${popupIdClaim}">領取</button> `;
+        if (f.claimedBy && currentUser && f.claimedBy === (currentUser.email || currentUser.uid)) popupHtml += `<button id="${popupIdConfirm}">確認領取</button> `;
+        if (currentUser && f.ownerUid === currentUser.uid) popupHtml += `<button id="${popupIdRemove}">收回</button>`;
         popupHtml += `</div></div>`;
 
         marker.bindPopup(popupHtml);
-
-        // 當 popup 開啟時，綁定按鈕事件（因為按鈕是在 popup render 後才在 DOM）
         marker.on('popupopen', () => {
-            // 領取按鈕
             const claimBtn = document.getElementById(popupIdClaim);
-            if (claimBtn) {
-                claimBtn.onclick = async () => {
-                    try {
-                        await claimFoodTransaction(id);
-                        marker.closePopup();
-                    } catch (e) {
-                        console.error(e);
-                        alert("領取失敗：" + e.message);
-                    }
-                };
-            }
-            // 確認領取
+            if (claimBtn) claimBtn.onclick = async () => { await claimFoodTransaction(id); marker.closePopup(); };
             const confirmBtn = document.getElementById(popupIdConfirm);
-            if (confirmBtn) {
-                confirmBtn.onclick = async () => {
-                    try {
-                        await confirmFood(id);
-                        marker.closePopup();
-                    } catch (e) {
-                        console.error(e);
-                        alert("確認領取失敗：" + e.message);
-                    }
-                };
-            }
-            // 收回
+            if (confirmBtn) confirmBtn.onclick = async () => { await confirmFood(id); marker.closePopup(); };
             const removeBtn = document.getElementById(popupIdRemove);
-            if (removeBtn) {
-                removeBtn.onclick = async () => {
-                    if (!confirm("確定要收回此筆剩食？")) return;
-                    try {
-                        await removeFood(id);
-                        marker.closePopup();
-                    } catch (e) {
-                        console.error(e);
-                        alert("收回失敗：" + e.message);
-                    }
-                };
-            }
+            if (removeBtn) removeBtn.onclick = async () => { if(confirm("確定收回？")) await removeFood(id); marker.closePopup(); };
         });
-
         markers[id] = marker;
     }
 }
 
-// ====== 在畫面上渲染文字列表（右側或下方） ======
+// ====== 列表顯示 ======
 function renderFoodList(data) {
     foodListDiv.innerHTML = "";
     const user = auth.currentUser;
-    Object.entries(data).forEach(([id, f]) => {
+    Object.entries(data).forEach(([id,f]) => {
         const div = document.createElement("div");
         div.className = "foodItem";
         div.style.border = "1px solid #ddd";
         div.style.padding = "8px";
         div.style.margin = "8px 0";
-
         div.innerHTML = `
-            <h4 style="margin:4px 0">${escapeHtml(f.name)}</h4>
-            <div>位置：${escapeHtml(f.locationText || "")}</div>
-            <div style="margin:6px 0"><img src="${escapeHtml(f.imageUrl)}" style="max-width:160px;"></div>
+            <h4>${escapeHtml(f.name)}</h4>
+            <div>位置：${escapeHtml(f.locationText)}</div>
+            <div><img src="${f.imageUrl}" style="max-width:160px;"></div>
             <div>上傳者：${escapeHtml(f.ownerEmail || "匿名")}</div>
             ${f.claimedBy ? `<div>已被 ${escapeHtml(f.claimedBy)} 領取 (${f.claimedAt ? new Date(f.claimedAt).toLocaleString() : ""})</div>` : ""}
         `;
-
-        // 按鈕區
         const btnDiv = document.createElement("div");
-        btnDiv.style.marginTop = "6px";
-
-        // 領取（未被領且不是上傳者）
+        btnDiv.style.marginTop="6px";
         if (!f.claimedBy && user && f.ownerUid !== user.uid) {
-            const b = document.createElement("button");
-            b.textContent = "領取";
-            b.onclick = async () => {
-                try {
-                    await claimFoodTransaction(id);
-                } catch (e) {
-                    console.error(e);
-                    alert("領取失敗：" + e.message);
-                }
-            };
-            btnDiv.appendChild(b);
+            const b = document.createElement("button"); b.textContent="領取"; b.onclick=async()=>{await claimFoodTransaction(id);}; btnDiv.appendChild(b);
         }
-
-        // 確認領取（被自己領取）
         if (f.claimedBy && user && f.claimedBy === (user.email || user.uid)) {
-            const b = document.createElement("button");
-            b.textContent = "確認領取";
-            b.onclick = async () => {
-                try {
-                    await confirmFood(id);
-                } catch (e) {
-                    console.error(e);
-                    alert("確認失敗：" + e.message);
-                }
-            };
-            btnDiv.appendChild(b);
+            const b = document.createElement("button"); b.textContent="確認領取"; b.onclick=async()=>{await confirmFood(id);}; btnDiv.appendChild(b);
         }
-
-        // 收回（上傳者）
         if (user && f.ownerUid === user.uid) {
-            const b = document.createElement("button");
-            b.textContent = "收回";
-            b.onclick = async () => {
-                if (!confirm("確定要收回？")) return;
-                try {
-                    await removeFood(id);
-                } catch (e) {
-                    console.error(e);
-                    alert("收回失敗：" + e.message);
-                }
-            };
-            btnDiv.appendChild(b);
+            const b = document.createElement("button"); b.textContent="收回"; b.onclick=async()=>{if(confirm("確定收回？")) await removeFood(id);}; btnDiv.appendChild(b);
         }
-
         div.appendChild(btnDiv);
         foodListDiv.appendChild(div);
     });
 }
 
-// ====== 領取（transaction 保護） ======
+// ====== 交易與刪除 ======
 async function claimFoodTransaction(id) {
-    const user = auth.currentUser;
-    if (!user) throw new Error("請先登入。");
+    const user = auth.currentUser; if(!user) throw new Error("請先登入");
     const ref = db.ref(`foods/${id}`);
     await ref.transaction(current => {
-        if (current === null) {
-            // 已被刪除
-            return current;
-        }
-        if (!current.claimedBy) {
-            current.claimedBy = user.email || user.uid;
-            current.claimedAt = Date.now();
-            return current;
-        } else {
-            // 已被領取，不覆寫
-            return;
-        }
-    }, (err, committed, snapshot) => {
-        if (err) console.error("transaction error:", err);
-        // committed true 表示有成功改變資料（變成領取）
+        if(current && !current.claimedBy){current.claimedBy=user.email||user.uid;current.claimedAt=Date.now(); return current;}
     });
 }
+async function confirmFood(id){ await db.ref(`foods/${id}`).remove(); }
+async function removeFood(id){ await db.ref(`foods/${id}`).remove(); }
 
-// ====== 確認領取（刪除節點） ======
-async function confirmFood(id) {
-    await db.ref(`foods/${id}`).remove();
-}
-
-// ====== 收回（上傳者刪除） ======
-async function removeFood(id) {
-    await db.ref(`foods/${id}`).remove();
-}
-
-// ====== 小工具：避免 XSS（只做基本 escape） ======
-function escapeHtml(str) {
-    if (!str && str !== 0) return "";
-    return String(str)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
-}
+// ====== 防 XSS ======
+function escapeHtml(str){ if(!str && str!==0)return ""; return String(str).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;"); }
