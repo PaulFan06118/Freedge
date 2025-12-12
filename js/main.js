@@ -1,176 +1,163 @@
-// ===== Firebase 初始化 =====
+// ====== 初始化 Firebase ======
 const firebaseConfig = {
     apiKey: "AIzaSyDCnxi5yYqPMSnEojPfnXgqBE2_Oi-X1OY",
     authDomain: "freedge-yzu.firebaseapp.com",
     databaseURL: "https://freedge-yzu-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "freedge-yzu",
-    storageBucket: "freedge-yzu.firebasestorage.app",
+    appId: "1:577649251490:web:9fb4af3ee7c4d9d06f33fb"
 };
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.database();
-const storage = firebase.storage();
 
-// ===== 元素 =====
-const registerBtn = document.getElementById('registerBtn');
-const loginBtn = document.getElementById('loginBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const authForms = document.getElementById('authForms');
-const welcome = document.getElementById('welcome');
-const welcomeText = document.getElementById('welcomeText');
-const uploadSection = document.getElementById('upload');
+// ====== DOM 元素 ======
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+const registerBtn = document.getElementById("registerBtn");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const welcomeSection = document.getElementById("welcome");
+const uploadSection = document.getElementById("upload");
+const welcomeText = document.getElementById("welcomeText");
+const foodForm = document.getElementById("foodForm");
+const foodListDiv = document.getElementById("foodList");
 
-const foodForm = document.getElementById('foodForm');
-const foodList = document.getElementById('foodList');
-const featuredList = document.getElementById('featuredList');
-const useMyLocationBtn = document.getElementById('useMyLocationBtn');
-
-let currentUser = null;
-let currentLatLng = null;
-
-// ===== Leaflet 地圖 =====
-var map = L.map('mapid').setView([25.033, 121.565], 13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors'
-}).addTo(map);
-
-// ===== 登入/註冊/登出 =====
-registerBtn.addEventListener('click', () => {
-    const email = emailInput.value;
-    const password = passwordInput.value;
-    if(!email || !password){ alert('請填寫完整'); return; }
-    auth.createUserWithEmailAndPassword(email, password)
-        .then(() => alert('註冊成功'))
-        .catch(err => alert(err.message));
+// ====== 使用者登入/登出 ======
+registerBtn.addEventListener("click", async () => {
+    try {
+        const userCredential = await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value);
+        alert("註冊成功!");
+    } catch(e) { alert(e.message); }
 });
 
-loginBtn.addEventListener('click', () => {
-    const email = emailInput.value;
-    const password = passwordInput.value;
-    auth.signInWithEmailAndPassword(email, password)
-        .catch(err => alert(err.message));
+loginBtn.addEventListener("click", async () => {
+    try {
+        await auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value);
+    } catch(e) { alert(e.message); }
 });
 
-logoutBtn.addEventListener('click', () => auth.signOut());
+logoutBtn.addEventListener("click", () => auth.signOut());
 
-// ===== 監聽登入狀態 =====
+// ====== 監聽登入狀態 ======
 auth.onAuthStateChanged(user => {
     if(user){
-        currentUser = user;
-        authForms.style.display = 'none';
-        welcome.style.display = 'block';
-        uploadSection.style.display = 'block';
-        welcomeText.textContent = `歡迎, ${user.email}`;
+        welcomeSection.style.display = "block";
+        uploadSection.style.display = "block";
+        welcomeText.textContent = `歡迎，${user.email}`;
         loadFoods();
     } else {
-        currentUser = null;
-        authForms.style.display = 'block';
-        welcome.style.display = 'none';
-        uploadSection.style.display = 'none';
-        foodList.innerHTML = '';
-        featuredList.innerHTML = '';
+        welcomeSection.style.display = "none";
+        uploadSection.style.display = "none";
+        foodListDiv.innerHTML = "";
     }
 });
 
-// ===== 使用者位置 =====
-useMyLocationBtn.addEventListener('click', () => {
-    if(!navigator.geolocation){ alert('瀏覽器不支援'); return; }
-    navigator.geolocation.getCurrentPosition(
-        pos => {
-            currentLatLng = [pos.coords.latitude, pos.coords.longitude];
-            document.getElementById('foodLocation').value = 
-                `經度:${currentLatLng[1].toFixed(5)}, 緯度:${currentLatLng[0].toFixed(5)}`;
-        },
-        err => alert('無法取得位置')
-    );
-});
-
-// ===== 上傳剩食 =====
-foodForm.addEventListener('submit', async e => {
+// ====== 上傳剩食資訊 ======
+foodForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if(!currentUser){ alert('請先登入'); return; }
+    const foodName = document.getElementById("foodName").value;
+    const foodLocation = document.getElementById("foodLocation").value;
+    const foodImageFile = document.getElementById("foodImage").files[0];
 
-    const name = document.getElementById('foodName').value;
-    const loc = document.getElementById('foodLocation').value;
-    const fileInput = document.getElementById('foodImage');
-    let image_url = '';
+    if(!foodImageFile) return alert("請選擇圖片!");
 
-    // 上傳圖片到 Firebase Storage
-    if(fileInput.files[0]){
-        const file = fileInput.files[0];
-        const fileName = Date.now() + "-" + file.name;
-        const storageRef = storage.ref().child('food-images/' + fileName);
-        await storageRef.put(file);
-        image_url = await storageRef.getDownloadURL();
-    }
+    // 上傳到 Catbox
+    const formData = new FormData();
+    formData.append("reqtype","fileupload");
+    formData.append("userhash","");
+    formData.append("fileToUpload", foodImageFile);
 
-    // 寫入 Firebase Database
-    const newRef = db.ref('foods').push();
-    newRef.set({
-        user: currentUser.email,
-        name,
-        location: loc,
-        lat: currentLatLng?.[0] || null,
-        lng: currentLatLng?.[1] || null,
-        image_url,
-        timestamp: Date.now()
+    const res = await fetch("https://catbox.moe/user/api.php", { method:"POST", body:formData });
+    const imageUrl = await res.text();
+
+    // 存到 Firebase
+    const newFoodRef = db.ref("foods").push();
+    await newFoodRef.set({
+        name: foodName,
+        location: foodLocation,
+        imageUrl: imageUrl,
+        owner: auth.currentUser.email,
+        claimedBy: null,
+        claimedAt: null,
+        createdAt: Date.now()
     });
 
     foodForm.reset();
-    currentLatLng = null;
 });
 
-// ===== 讀取剩食 =====
+// ====== 載入剩食列表 ======
 function loadFoods(){
-    db.ref('foods').on('value', snapshot => {
-        foodList.innerHTML = '';
-        featuredList.innerHTML = '';
-        snapshot.forEach(snap => addFoodToPage(snap.val()));
+    const foodsRef = db.ref("foods");
+    foodsRef.off(); // 先移除舊監聽
+    foodsRef.on("value", snapshot => {
+        const data = snapshot.val() || {};
+        renderFoodList(data);
     });
 }
 
-// ===== 顯示剩食 =====
-function addFoodToPage(f){
-    // 推薦區
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'item';
-    const itemText = document.createElement('p');
-    itemText.textContent = f.name;
-    itemDiv.appendChild(itemText);
-    if(f.image_url){
-        const itemImg = document.createElement('img');
-        itemImg.src = f.image_url;
-        itemImg.style.width = '100px';
-        itemImg.style.height = '100px';
-        itemImg.style.objectFit = 'cover';
-        itemDiv.appendChild(itemImg);
-    }
-    featuredList.appendChild(itemDiv);
+// ====== 渲染列表 ======
+function renderFoodList(data){
+    foodListDiv.innerHTML = "";
+    const user = auth.currentUser;
+    Object.entries(data).forEach(([id, food]) => {
+        const div = document.createElement("div");
+        div.className = "foodItem";
+        div.innerHTML = `
+            <h3>${food.name}</h3>
+            <p>位置：${food.location}</p>
+            <img src="${food.imageUrl}" style="max-width:200px;">
+            <p>上傳者：${food.owner}</p>
+            ${food.claimedBy ? `<p>已被 ${food.claimedBy} 領取 (${new Date(food.claimedAt).toLocaleString()})</p>` : ""}
+        `;
 
-    // 列表區
-    const div = document.createElement('div');
-    div.style.marginTop = '10px';
-    const text = document.createElement('p');
-    text.textContent = `食物: ${f.name} / 地點: ${f.location}`;
-    div.appendChild(text);
-    if(f.image_url){
-        const img = document.createElement('img');
-        img.src = f.image_url;
-        img.style.width = '200px';
-        img.style.height = '150px';
-        img.style.objectFit = 'cover';
-        img.style.marginTop = '5px';
-        div.appendChild(img);
-    }
-    foodList.appendChild(div);
+        // 按鈕區域
+        const btnDiv = document.createElement("div");
 
-    // 地圖標記
-    if(f.lat && f.lng){
-        L.marker([f.lat, f.lng])
-         .addTo(map)
-         .bindPopup(`<b>${f.name}</b><br>${f.location}`);
-    }
+        // 如果還沒領取，其他使用者可以領取
+        if(!food.claimedBy && food.owner !== user.email){
+            const claimBtn = document.createElement("button");
+            claimBtn.textContent = "領取";
+            claimBtn.onclick = () => claimFood(id, food);
+            btnDiv.appendChild(claimBtn);
+        }
+
+        // 如果已被自己領取，顯示確認領取
+        if(food.claimedBy === user.email){
+            const confirmBtn = document.createElement("button");
+            confirmBtn.textContent = "確認領取";
+            confirmBtn.onclick = () => confirmFood(id);
+            btnDiv.appendChild(confirmBtn);
+        }
+
+        // 如果是上傳者，顯示收回按鈕
+        if(food.owner === user.email){
+            const removeBtn = document.createElement("button");
+            removeBtn.textContent = "收回";
+            removeBtn.onclick = () => removeFood(id);
+            btnDiv.appendChild(removeBtn);
+        }
+
+        div.appendChild(btnDiv);
+        foodListDiv.appendChild(div);
+    });
+}
+
+// ====== 領取 ======
+function claimFood(id, food){
+    const updates = {
+        claimedBy: auth.currentUser.email,
+        claimedAt: Date.now()
+    };
+    db.ref(`foods/${id}`).update(updates);
+}
+
+// ====== 確認領取 ======
+function confirmFood(id){
+    db.ref(`foods/${id}`).remove();
+}
+
+// ====== 收回 ======
+function removeFood(id){
+    db.ref(`foods/${id}`).remove();
 }
