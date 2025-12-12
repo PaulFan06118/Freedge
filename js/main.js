@@ -1,10 +1,10 @@
-// ====== 初始化 Firebase ======
+// ====== 初始化 Firebase（請填入你自己的設定） ======
 const firebaseConfig = {
     apiKey: "AIzaSyDCnxi5yYqPMSnEojPfnXgqBE2_Oi-X1OY",
     authDomain: "freedge-yzu.firebaseapp.com",
     databaseURL: "https://freedge-yzu-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "freedge-yzu",
-    appId: "1:577649251490:web:9fb4af3ee7c4d9d06f33fb"
+    appId: "1:577649251490:web:9fb4af3ee7c4d9d06f33fb",
 };
 firebase.initializeApp(firebaseConfig);
 
