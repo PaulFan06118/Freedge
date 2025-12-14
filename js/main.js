@@ -36,13 +36,13 @@ let tempLon = null;
 
 // ====== Auth ======
 registerBtn.addEventListener("click", async () => {
-    try { await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value); alert("註冊成功！"); }
-    catch (e) { alert("註冊失敗：" + e.message); }
+    try { await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value); alert("Signed up successfully!"); }
+    catch (e) { alert("Failed to sign up: " + e.message); }
 });
 
 loginBtn.addEventListener("click", async () => {
     try { await auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value); }
-    catch (e) { alert("登入失敗：" + e.message); }
+    catch (e) { alert("Failed to log in: " + e.message); }
 });
 
 logoutBtn.addEventListener("click", () => auth.signOut());
@@ -51,7 +51,7 @@ auth.onAuthStateChanged(user => {
     if (user) {
         welcomeSection.style.display = "block";
         uploadSection.style.display = "block";
-        welcomeText.textContent = `歡迎，${user.email}`;
+        welcomeText.textContent = `Welcome! ${user.email}`;
         loadFoods();
     } else {
         welcomeSection.style.display = "none";
@@ -63,20 +63,20 @@ auth.onAuthStateChanged(user => {
 
 // ====== 使用者 GPS ======
 useMyLocationBtn.addEventListener("click", () => {
-    if (!navigator.geolocation) return alert("你的瀏覽器不支援地理位置定位。");
+    if (!navigator.geolocation) return alert("Your browser does not support location services.");
     useMyLocationBtn.disabled = true;
-    useMyLocationBtn.textContent = "取得中...";
+    useMyLocationBtn.textContent = "Getting location...";
     navigator.geolocation.getCurrentPosition(pos => {
         tempLat = pos.coords.latitude;
         tempLon = pos.coords.longitude;
-        useMyLocationBtn.textContent = "已使用我的位置";
+        useMyLocationBtn.textContent = "Location obtained";
         useMyLocationBtn.disabled = false;
-        foodLocationInput.value = `我的位置 (lat:${tempLat.toFixed(5)}, lon:${tempLon.toFixed(5)})`;
+        foodLocationInput.value = `My location (lat:${tempLat.toFixed(5)}, lon:${tempLon.toFixed(5)})`;
         map.setView([tempLat, tempLon], 15);
     }, err => {
-        alert("取得位置失敗: " + (err.message || err.code));
+        alert("Failed to get location: " + (err.message || err.code));
         useMyLocationBtn.disabled = false;
-        useMyLocationBtn.textContent = "使用我的位置";
+        useMyLocationBtn.textContent = "Use my location";
     }, { enableHighAccuracy: true, timeout: 10000 });
 });
 
@@ -84,13 +84,13 @@ useMyLocationBtn.addEventListener("click", () => {
 foodForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const user = auth.currentUser;
-    if (!user) return alert("請先登入。");
+    if (!user) return alert("Please log in first.");
 
     const name = document.getElementById("foodName").value.trim();
     const locationText = foodLocationInput.value.trim();
     const file = foodImageInput.files[0];
 
-    if (!name || !file || (!locationText && tempLat === null)) return alert("請完整填寫資訊並選擇圖片。");
+    if (!name || !file || (!locationText && tempLat === null)) return alert("Please fill in all fields and upload an image");
 
     const reader = new FileReader();
     reader.onload = async function(event) {
@@ -115,9 +115,9 @@ foodForm.addEventListener("submit", async (e) => {
 
         tempLat = null;
         tempLon = null;
-        useMyLocationBtn.textContent = "使用我的位置";
+        useMyLocationBtn.textContent = "Use my location";
         foodForm.reset();
-        alert("上傳成功！");
+        alert("Posted successfully!");
     };
     reader.readAsDataURL(file);
 });
@@ -154,14 +154,14 @@ function renderMapMarkers(data) {
         let popupHtml = `<div style="min-width:180px">
             <b>${escapeHtml(f.name)}</b><br>
             <img src="${f.imageUrl}" width="160" style="display:block;margin:6px 0;"><br>
-            <small>上傳者：${escapeHtml(f.ownerEmail || "匿名")}</small><br>
-            ${f.claimedBy ? `<small>已被 ${escapeHtml(f.claimedBy)} 領取 (${f.claimedAt ? new Date(f.claimedAt).toLocaleString() : ""})</small><br>` : ""}
+            <small>Posted by: ${escapeHtml(f.ownerEmail || "Anonymous")}</small><br>
+            ${f.claimedBy ? `<small>Already claimed by ${escapeHtml(f.claimedBy)} (${f.claimedAt ? new Date(f.claimedAt).toLocaleString() : ""})</small><br>` : ""}
             <div style="margin-top:6px;">`;
 
         const currentUser = auth.currentUser;
-        if (!f.claimedBy && currentUser && f.ownerUid !== currentUser.uid) popupHtml += `<button id="claim_${id}">領取</button> `;
-        if (f.claimedBy && currentUser && f.claimedBy === (currentUser.email || currentUser.uid)) popupHtml += `<button id="confirm_${id}">確認領取</button> `;
-        if (currentUser && f.ownerUid === currentUser.uid) popupHtml += `<button id="remove_${id}">收回</button>`;
+        if (!f.claimedBy && currentUser && f.ownerUid !== currentUser.uid) popupHtml += `<button id="claim_${id}">I want it</button> `;
+        if (f.claimedBy && currentUser && f.claimedBy === (currentUser.email || currentUser.uid)) popupHtml += `<button id="confirm_${id}">Got it</button> `;
+        if (currentUser && f.ownerUid === currentUser.uid) popupHtml += `<button id="remove_${id}">Withdraw food</button>`;
         popupHtml += `</div></div>`;
 
         marker.bindPopup(popupHtml);
@@ -171,7 +171,7 @@ function renderMapMarkers(data) {
             const confirmBtn = document.getElementById(`confirm_${id}`);
             if (confirmBtn) confirmBtn.onclick = async () => { await confirmFood(id); marker.closePopup(); };
             const removeBtn = document.getElementById(`remove_${id}`);
-            if (removeBtn) removeBtn.onclick = async () => { if(confirm("確定收回？")) await removeFood(id); marker.closePopup(); };
+            if (removeBtn) removeBtn.onclick = async () => { if(confirm("Do you really want to withdraw this post?")) await removeFood(id); marker.closePopup(); };
         });
         markers[id] = marker;
     }
@@ -189,21 +189,21 @@ function renderFoodList(data) {
         div.style.margin = "8px 0";
         div.innerHTML = `
             <h4>${escapeHtml(f.name)}</h4>
-            <div>位置：${escapeHtml(f.locationText)}</div>
+            <div>Location: ${escapeHtml(f.locationText)}</div>
             <div><img src="${f.imageUrl}" style="max-width:160px;"></div>
-            <div>上傳者：${escapeHtml(f.ownerEmail || "匿名")}</div>
-            ${f.claimedBy ? `<div>已被 ${escapeHtml(f.claimedBy)} 領取 (${f.claimedAt ? new Date(f.claimedAt).toLocaleString() : ""})</div>` : ""}
+            <div>Posted by: ${escapeHtml(f.ownerEmail || "Anonymous")}</div>
+            ${f.claimedBy ? `<div>Already claimed by ${escapeHtml(f.claimedBy)} (${f.claimedAt ? new Date(f.claimedAt).toLocaleString() : ""})</div>` : ""}
         `;
         const btnDiv = document.createElement("div");
         btnDiv.style.marginTop="6px";
         if (!f.claimedBy && user && f.ownerUid !== user.uid) {
-            const b = document.createElement("button"); b.textContent="領取"; b.onclick=async()=>{await claimFoodTransaction(id);}; btnDiv.appendChild(b);
+            const b = document.createElement("button"); b.textContent="I want it"; b.onclick=async()=>{await claimFoodTransaction(id);}; btnDiv.appendChild(b);
         }
         if (f.claimedBy && user && f.claimedBy === (user.email || user.uid)) {
-            const b = document.createElement("button"); b.textContent="確認領取"; b.onclick=async()=>{await confirmFood(id);}; btnDiv.appendChild(b);
+            const b = document.createElement("button"); b.textContent="Got it"; b.onclick=async()=>{await confirmFood(id);}; btnDiv.appendChild(b);
         }
         if (user && f.ownerUid === user.uid) {
-            const b = document.createElement("button"); b.textContent="收回"; b.onclick=async()=>{if(confirm("確定收回？")) await removeFood(id);}; btnDiv.appendChild(b);
+            const b = document.createElement("button"); b.textContent="Withdraw post"; b.onclick=async()=>{if(confirm("Do you really want to withdraw this post?")) await removeFood(id);}; btnDiv.appendChild(b);
         }
         div.appendChild(btnDiv);
         foodListDiv.appendChild(div);
@@ -212,7 +212,7 @@ function renderFoodList(data) {
 
 // ====== 交易與刪除 ======
 async function claimFoodTransaction(id) {
-    const user = auth.currentUser; if(!user) throw new Error("請先登入");
+    const user = auth.currentUser; if(!user) throw new Error("Please log in first.");
     const ref = db.ref(`foods/${id}`);
     await ref.transaction(current => {
         if(current && !current.claimedBy){current.claimedBy=user.email||user.uid;current.claimedAt=Date.now(); return current;}
